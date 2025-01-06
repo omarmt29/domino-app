@@ -17,9 +17,6 @@
             border: 1px solid #ddd;
             max-width: 90%;
         }
-        #canvasOutput {
-            filter: blur(5px);
-        }
     </style>
 </head>
 <body>
@@ -28,13 +25,13 @@
     <canvas id="canvas" width="640" height="480"></canvas>
     <canvas id="canvasOutput" width="640" height="480"></canvas>
     <p>Posiciona una ficha de dominó frente a la cámara.</p>
-    <button id="toggleCamera">Cambiar cámara</button>
 
     <script>
         let currentStream;
         let video = document.getElementById('video');
-        let isFrontCamera = true; // Variable para almacenar el estado de la cámara (frontal o trasera)
-
+        let canvas = document.getElementById('canvas');
+        let ctx = canvas.getContext('2d');
+        
         // Función para acceder a la cámara
         function startCamera(deviceId) {
             if (currentStream) {
@@ -50,26 +47,53 @@
                 currentStream = stream;
                 video.srcObject = stream;
                 video.play();
+
+                // Cada vez que el video está listo, procesamos el fotograma
+                video.addEventListener('play', () => {
+                    setInterval(() => {
+                        // Dibujar el fotograma actual del video en el canvas
+                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                        // Procesar la imagen con OpenCV.js
+                        const src = cv.imread(canvas);
+                        const dst = new cv.Mat();
+                        
+                        // Convertir a escala de grises
+                        cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY);
+
+                        // Aplicar un desenfoque para reducir el ruido
+                        cv.GaussianBlur(dst, dst, new cv.Size(15, 15), 0, 0, cv.BORDER_DEFAULT);
+
+                        // Detectar círculos con Hough Circle Transform
+                        const circles = new cv.Mat();
+                        cv.HoughCircles(dst, circles, cv.HOUGH_GRADIENT, 1, 20, 100, 30, 10, 100); 
+
+                        // Dibujar los círculos detectados
+                        for (let i = 0; i < circles.cols; i++) {
+                            const circle = circles.data32F.slice(i * 3, i * 3 + 3);
+                            const center = new cv.Point(circle[0], circle[1]);
+                            const radius = circle[2];
+
+                            // Dibujar el círculo
+                            cv.circle(src, center, radius, [0, 255, 0, 255], 2);
+                        }
+
+                        // Mostrar el resultado
+                        cv.imshow('canvasOutput', src);
+
+                        // Limpiar la memoria
+                        src.delete();
+                        dst.delete();
+                        circles.delete();
+                    }, 100);
+                });
             }).catch((err) => {
                 console.error('Error al acceder a la cámara:', err);
             });
         }
 
-        // Obtener la lista de dispositivos de medios
-        navigator.mediaDevices.enumerateDevices().then(devices => {
-            // Filtrar solo las cámaras
-            const videoDevices = devices.filter(device => device.kind === 'videoinput');
-            
-            // Establecer la cámara frontal por defecto
-            startCamera(videoDevices.find(device => device.facing === 'user')?.deviceId);
-            
-            // Cambiar de cámara al hacer clic en el botón
-            document.getElementById('toggleCamera').addEventListener('click', () => {
-                isFrontCamera = !isFrontCamera; // Cambiar el estado de la cámara
-                const selectedDevice = videoDevices.find(device => isFrontCamera ? device.facing === 'user' : device.facing === 'environment');
-                startCamera(selectedDevice?.deviceId);
-            });
-        });
+        // Iniciar la cámara
+        startCamera();
     </script>
 </body>
 </html>
