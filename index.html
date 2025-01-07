@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Detección Afinada de Puntos</title>
+  <title>Detección de Puntos Grandes</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -30,11 +30,11 @@
   </style>
 </head>
 <body>
-  <h1>Detección Afinada de Puntos</h1>
+  <h1>Detección de Puntos Grandes</h1>
   <video id="video" autoplay playsinline muted></video>
   <canvas id="canvas"></canvas>
   <button id="capture">Tomar Foto</button>
-  <div id="output">Enfoca las fichas de dominó en la cámara y captura una foto.</div>
+  <div id="output">Enfoca las fichas de dominó y captura una foto.</div>
 
   <script>
     const video = document.getElementById('video');
@@ -133,8 +133,9 @@
         return { size, minX, maxX, minY, maxY };
       }
 
-      let dotSizes = [];
       const dots = [];
+      const minSize = 200; // Umbral mínimo para puntos grandes
+      let largestDotSize = 0;
 
       for (let y = 0; y < canvas.height; y++) {
         for (let x = 0; x < canvas.width; x++) {
@@ -143,17 +144,18 @@
             const width = maxX - minX;
             const height = maxY - minY;
 
-            if (size > 20 && width / height > 0.8 && width / height < 1.2) {
+            if (size > minSize && width / height > 0.8 && width / height < 1.2) {
               dots.push({ size, minX, minY, width, height });
-              dotSizes.push(size);
+              if (size > largestDotSize) {
+                largestDotSize = size;
+              }
             }
           }
         }
       }
 
-      // Filtrar puntos según tamaño promedio
-      const avgSize = dotSizes.reduce((a, b) => a + b, 0) / dotSizes.length;
-      const validDots = dots.filter(dot => Math.abs(dot.size - avgSize) < avgSize * 0.4);
+      // Filtrar puntos basados en el tamaño del punto más grande
+      const validDots = dots.filter(dot => Math.abs(dot.size - largestDotSize) < largestDotSize * 0.4);
 
       validDots.forEach(dot => {
         ctx.strokeStyle = 'red';
