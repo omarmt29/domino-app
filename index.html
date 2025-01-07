@@ -17,6 +17,12 @@
       margin-top: 20px;
       border: 1px solid black;
     }
+    button {
+      margin-top: 10px;
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+    }
     #output {
       margin-top: 20px;
       font-size: 18px;
@@ -28,16 +34,32 @@
   <h1>Detección de Puntos en Tiempo Real</h1>
   <video id="video" autoplay playsinline muted></video>
   <canvas id="canvas"></canvas>
+  <button id="toggleCamera">Activar Cámara Normal</button>
   <div id="output">Enfoca las fichas de dominó en la cámara.</div>
 
   <script>
-    // Acceder a la cámara del dispositivo
+    let useFrontCamera = true; // Por defecto, usar la cámara frontal
+    const video = document.getElementById('video');
+    const toggleCameraButton = document.getElementById('toggleCamera');
+
     async function startCamera() {
-      const video = document.getElementById('video');
+      // Detener cualquier stream activo previo
+      if (video.srcObject) {
+        video.srcObject.getTracks().forEach(track => track.stop());
+      }
+
+      // Configurar la cámara (frontal o trasera)
+      const constraints = {
+        video: {
+          facingMode: useFrontCamera ? 'user' : 'environment'
+        }
+      };
+
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
         video.srcObject = stream;
         video.addEventListener('play', processVideo);
+        toggleCameraButton.innerText = useFrontCamera ? 'Activar Cámara Normal' : 'Activar Cámara Frontal';
       } catch (err) {
         console.error('Error al acceder a la cámara:', err);
         document.getElementById('output').innerText = 'No se pudo acceder a la cámara.';
@@ -63,7 +85,6 @@
     }
 
     function processVideo() {
-      const video = document.getElementById('video');
       const canvas = document.getElementById('canvas');
       const ctx = canvas.getContext('2d');
       canvas.width = video.videoWidth;
@@ -101,6 +122,12 @@
       tracking.track('#video', tracker);
       requestAnimationFrame(processVideo);
     }
+
+    // Alternar entre cámaras (frontal y trasera)
+    toggleCameraButton.addEventListener('click', () => {
+      useFrontCamera = !useFrontCamera;
+      startCamera();
+    });
 
     // Iniciar la cámara al cargar la página
     startCamera();
