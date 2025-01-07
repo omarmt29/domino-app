@@ -1,59 +1,79 @@
-// Asegúrate de que OpenCV.js esté cargado antes de usarlo
-if (typeof cv === 'undefined') {
-    console.error('OpenCV.js no se ha cargado correctamente.');
-} else {
-    // Acceder a la cámara
-    navigator.mediaDevices.getUserMedia({ video: true }).then((stream) => {
-        const video = document.getElementById('video');
-        const canvas = document.getElementById('canvas');
-        const canvasOutput = document.getElementById('canvasOutput');
-        const ctx = canvas.getContext('2d');
+function detectDominoDots(canvas, ctx) {
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
 
-        // Establecer el tamaño del canvas para que coincida con el tamaño del video
-        video.srcObject = stream;
-        video.play();
+    // Convertir a escala de grises y binarizar
+    for (let i = 0; i < data.length; i += 4) {
+        const gray = (data[i] + data[i + 1] + data[i + 2]) / 3;
+        const binary = gray > 128 ? 255 : 0; // Umbral simple
+        data[i] = data[i + 1] = data[i + 2] = binary; // Blanco o negro
+    }
+    ctx.putImageData(imageData, 0, 0);
 
-        video.addEventListener('play', () => {
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
+    const width = canvas.width;
+    const height = canvas.height;
 
-            setInterval(() => {
-                // Dibujar el fotograma actual del video en el canvas
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const visited = new Set();
+    let dotCount = 0;
 
-                // Procesar la imagen con OpenCV.js
-                const src = cv.imread(canvas);
-                const dst = new cv.Mat();
+    // Función para verificar si un píxel es negro
+    function isBlack(x, y) {
+        if (x < 0 || y < 0 || x >= width || y >= height) return false;
+        const index = (y * width + x) * 4;
+        return data[index] === 0; // Píxel negro
+    }
 
-                // Convertir a escala de grises
-                cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY);
+    // Flood Fill para agrupar píxeles conectados
+    function floodFill(x, y) {
+        const stack = [[x, y]];
+        const region = [];
+        let minX = x, maxX = x, minY = y, maxY = y;
 
-                // Aplicar un filtro de umbral para mejorar el contraste
-                cv.threshold(dst, dst, 100, 255, cv.THRESH_BINARY);
+        while (stack.length > 0) {
+            const [cx, cy] = stack.pop();
+            const key = `${cx},${cy}`;
+            if (visited.has(key)) continue;
+            visited.add(key);
+            region.push([cx, cy]);
 
-                // Detectar contornos
-                const contours = new cv.MatVector();
-                const hierarchy = new cv.Mat();
-                cv.findContours(dst, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+            // Actualizar límites
+            minX = Math.min(minX, cx);
+            maxX = Math.max(maxX, cx);
+            minY = Math.min(minY, cy);
+            maxY = Math.max(maxY, cy);
 
-                // Dibujar los contornos en el canvas de salida
-                const output = new cv.Mat();
-                cv.cvtColor(dst, output, cv.COLOR_GRAY2RGBA);
-                for (let i = 0; i < contours.size(); i++) {
-                    const color = new cv.Scalar(0, 255, 0, 255);
-                    cv.drawContours(output, contours, i, color, 2, cv.LINE_8, hierarchy, 0);
+            // Revisar vecinos
+            for (const [dx, dy] of [[0, 1], [1, 0], [0, -1], [-1, 0]]) {
+                const nx = cx + dx;
+                const ny = cy + dy;
+                if (isBlack(nx, ny)) stack.push([nx, ny]);
+            }
+        }
+
+        const width = maxX - minX + 1;
+        const height = maxY - minY + 1;
+
+        return { region, width, height };
+    }
+
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            if (isBlack(x, y) && !visited.has(`${x},${y}`)) {
+                const { region, width, height } = floodFill(x, y);
+
+                // Filtrar regiones por tamaño y forma
+                const area = region.length;
+                const aspectRatio = Math.max(width / height, height / width);
+
+                if (area > 10 && area < 200 && aspectRatio < 1.5) {
+                    dotCount++; // Contar como punto
+                } else {
+                    console.log(`Descartado: Area=${area}, AspectRatio=${aspectRatio}`);
                 }
-                cv.imshow('canvasOutput', output);
+            }
+        }
+    }
 
-                // Limpiar la memoria
-                src.delete();
-                dst.delete();
-                contours.delete();
-                hierarchy.delete();
-                output.delete();
-            }, 100);
-        });
-    }).catch((err) => {
-        console.error('Error al acceder a la cámara:', err);
-    });
+    output.innerText = `Puntos detectados: ${dotCount}`;
+    console.log(`Total de puntos detectados: ${dotCount}`);
 }
