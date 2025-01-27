@@ -3,12 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Escáner QR</title>
+    <title>Escáner de Código QR</title>
     <script src="https://unpkg.com/jsqr/dist/jsQR.js"></script>
 </head>
 <body>
     <h1>Escáner de Código QR</h1>
-    <video id="video" width="300" height="200" style="border: 1px solid black;"></video>
+    <button id="startButton">Iniciar Cámara</button>
+    <video id="video" width="300" height="200" style="border: 1px solid black; display:none;"></video>
     <canvas id="canvas" style="display:none;"></canvas>
     <p>Escaneado: <span id="result">Nada</span></p>
 
@@ -17,21 +18,43 @@
         let canvas = document.getElementById("canvas");
         let context = canvas.getContext("2d");
         let resultSpan = document.getElementById("result");
+        let startButton = document.getElementById("startButton");
+        let scanning = false;  // Variable para saber si estamos escaneando
 
-        // Acceso a la cámara
-        navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
-            .then(function (stream) {
-                video.srcObject = stream;
-                video.setAttribute("playsinline", true); // Requerido para iOS
-                video.play();
-                scanQRCode();
-            })
-            .catch(function (err) {
-                console.error("Error al acceder a la cámara: ", err);
-            });
+        // Acción del botón para iniciar la cámara
+        startButton.addEventListener("click", function () {
+            if (!scanning) {
+                scanning = true;
+                startButton.textContent = "Detener Cámara";
+                video.style.display = "block";  // Mostrar el video
+                startCamera();
+            } else {
+                scanning = false;
+                startButton.textContent = "Iniciar Cámara";
+                video.style.display = "none";  // Ocultar el video
+                resultSpan.textContent = "Nada";
+            }
+        });
+
+        // Función para acceder a la cámara y mostrar el video
+        function startCamera() {
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+                .then(function (stream) {
+                    video.srcObject = stream;
+                    video.setAttribute("playsinline", true); // Requerido para iOS
+                    video.play();
+                    scanQRCode();  // Empezamos a escanear cuando el video inicia
+                })
+                .catch(function (err) {
+                    console.error("Error al acceder a la cámara: ", err);
+                    alert("No se pudo acceder a la cámara.");
+                });
+        }
 
         // Función para escanear el QR
         function scanQRCode() {
+            if (!scanning) return;  // Detener si no estamos escaneando
+
             canvas.height = video.videoHeight;
             canvas.width = video.videoWidth;
             context.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -42,12 +65,12 @@
             });
 
             if (code) {
-                resultSpan.textContent = code.data;
+                resultSpan.textContent = "Enlace: " + code.data;  // Mostrar el enlace del QR
             } else {
-                resultSpan.textContent = "Nada";
+                resultSpan.textContent = "Nada";  // Si no se escanea, mostramos "Nada"
             }
 
-            requestAnimationFrame(scanQRCode); // Llama a la función de nuevo para hacer escaneo continuo
+            requestAnimationFrame(scanQRCode); // Llamamos la función de nuevo para continuar escaneando
         }
     </script>
 </body>
